@@ -1,6 +1,70 @@
 // Snake Windows.cpp : Define el punto de entrada de la aplicación.
 //
 
+/*
+* ERICK OSWALDO GALLEGOS PÉREZ. CARRERA: INGENIERÍA EN COMPUTACIÓN. SEMESTRE: OCTAVO. UNIVERSIDAD DEL ISTMO CAMPUS TEHUANTEPEC.
+    PARA CORRER
+    1. Se ejecuta el programa en máquinas diferentes dentro de una misma red. De forma: Snake Windows.exe IP_DE_LA_MÁQUINA USUARIO o simplemente editar el IP y nombre de usuario (char szMiIP[17] = "192.168.0.4";
+    char szUsuario[32] = "lap";) en sus respectivas variables desde código.
+    2. Una vez iniciado, se puede elegir jugar solo, que es el clásico juego. Pero también se puede jugar con otra máquina.
+    3. Para ser el servidor (máquina anfitriona) se debe ingresar en el cuadro de texto la IP de la otra máquina. De igual manera en la máquina dos.
+    En la anfotriona de le debe dar Jugar acompañado, lo cuál inicializará las dos serpientes en la máquina local, modificará banderas para la correcta visualización, seteará el timer para que esté a la
+    espera de ser activdo por el cliente, levantará la hebra del servidor y se visualizará todo.
+    4. En la otra máquina, se tendrá que dar a Conectarse para jugar, lo cual hará lo mismo que en la máquina anfitriona,
+    Pequeña explicación: con excepción de que la hebra creada se llamará Cliente y que después de levantar la conexión y ésta sea correcta
+        se envía el primer páquete de datos, el cual es el resultado de un tratamiento de int a char con la función numtochar, el resultado de este tratemiento del paquete de datos está compuesto por el tipo de máquina o usuario 
+        (cliente 1 o servidor 0), las direcciones de las dos respientes y sus tamaños, además que se mandará el identificador de qué es
+        lo que está enviando esta información, en este caso es un ESINICIOTIMER, lo cual es fundamental para iniciar correctamente el timer en el servidor.
+    Con lo anterior estaría visualizandose y corriendo correctamente en las dos máquinas.
+
+    EXPLICACIÓN
+    Como tal, el servidor está a la escucha constante de lo que el cliente envíe, entonces al momento de realizarse la conexión, éste recibe los primeros datos, como el tipo de máquina o usuario (cliente o servidor)
+    las direcciones de las serpientes, los tamaños, y por último el identificador de en qué parte se está enviando. 
+    
+    Estos datos pasan por MsgEnviar, en donde se realiza el paso para el Cliente. Esta función recibe lo que se envíe desde las teclas, el timer o la primera conexión
+    Lo que es importante aquí es hacer la traducción y envío del contenido a enviar, junto con el ip y el hWnd hacie el cliente para realizar la pertinente conexión con la computadora deseada.
+
+    Dentro del CLIENTE se manda la información para su posterior procesamiento en el servidor y por ende, la visualización gráfica de los snakes, de forma que:
+    C1. Se inicializa el winsock
+    C2. Se limpia la memoria para configurar la estructura del manejo de los sockets
+    C3. Se obtiene información del puerto
+    C4. Se prueba a conectar a una dirección hasta que una tenga éxito 
+        C4.1. Se crea un socker para conectarse al servidor
+        C4.2. Se conecta y valida el servidor
+    C5. Validación para la llamada de conexión al socket válido
+    C6. Primeramenre se envía el ip de nuestra máquina (en este caso cliente) y el nombre del usuario tal cual en la práctica original
+    C7. Se obtiene el echo lanzado por el servidor para ver si se conectó, en este caso no se hace nada con esa devolución
+    C8. Se coloca el envío de la información, es decir de los datos tales como las direcciones para las serpientes, el tipo de usuario en turno, el tamaño de cada una de las serpientes y el esUn respectivo para saber qué activar en el servidor, aquí faltaría que los datos a enviar contuviera la posición actual de la comida
+    C9. Se hace el envío de los datos y se espera recibir contestación por parte del servidor
+    C10. Una vez recibida la información proveniente del socket, de que es correcta la conexión final:
+        C10.1Se debe actualizar la vista gráfica para que todos los cambios que procese el servidor, aunque aquí sea el cliente, se visualicen. Es decir que en todo momento se debe actualizar la vista, para mantener sincronizado el juego.
+    C11. Se limpia y cierra el socket
+
+    Para el SERVIDOR como se mencionó antes, está a la escucha constante de lo que el cliente envíe, entonces al momento de realizarse la conexión, éste recibe todos datos, como el tipo de máquina o usuario (cliente o servidor)
+    las direcciones de las serpientes, los tamaños, y por último el identificador de en qué parte se está enviando. La lógica con la que funciona es la siguiente:
+    S1. Se inicializa el winsock
+    S2. Inicialización de las estructuras para la conexión
+    S3. Resuelve la dirección y el puerto del servidor
+    S4. Crea un SOCKET para la conexión al server
+    S5. Configura el escucha TCP del socket
+    S6. Escucha el socket
+    S7. En un ciclo infinito (se mantiene en escucha siempre)
+        S7.1. Acepta el socket de conexión del cliente
+        S7.2. Se recibe (y guarda para alguna otra implementación, NO EN ESTA) el IP y el usuario del cliente proveniente del socket, simplemente para corroborar la conexión y se devuelve un OK
+        S7.3. Se reciben los datos empaquetados provenientes del cliente en turno
+        S7.4. Se procesan en la función MsgRecibir los datos empaquetados provenientes del cliente para que los snakes se visualicen y funcionen correctamente
+            S7.4.1. Dentro de la función MsgRecibir es donde está todo lo funcional para que la visualización sea correcta en las dos máquinas, es cómo ese bonche de datos, se traduce y se toman acciones dependiendo de su contenido:           
+                S7.4.1.1 Primeramente se obtienen los valores almacenados que se han recibido por el socket
+                S7.4.1.2 Después se traducen a enteros, para su compatibilidad con la función de MoverSerpiente, en donde al fin se hace uso del hWnd para obtener el Rect del cliente y que esta función MoverSerpiente se llamará de acuerdo a lo recibido y con los datos pertinentes.
+                S7.4.1.3 Se verifica quién envió exactamente el paquete de datos con la información contenida en esUn, para así poder tomar la decisión (en el switch) de si:
+                    -fue por una tecla entonces checar qué máquina o usuario es el que movió por tecla y mover (MoverSerpiente) la serpiente en cuestión con los datos que se recibieron en el socket.
+                    -si fue por el timer entonces actualizar las dos serpientes, moviendolas (MoverSerpiente) con los datos que se recibieron en el socket.
+                    -o si fue por la primera conexión exitosa entre las máquinas, lo cual sucitará que se cambie el valor de la variable startTimer para dar inicio al movimiento del timer y visualizarlo en pantalla con los movimientos de las serpientes este paso es fundamental.
+                En todos los casos se llama al InvalidateRect para visualizar todo los cambios en la pantalla del juego
+        S7.5 Se devuelve el estado actual del juego (todos los datos)
+    S8. Se limpia y cierra el socket
+*/
+
 #include "framework.h"
 #include "Serpiente.h"
 #include "Snake Windows.h"
@@ -215,18 +279,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     {
     case WM_CREATE:
         {
-            hpenRed = CreatePen(PS_SOLID, 1, RGB(255, 0, 0));
-            hpenGreen = CreatePen(PS_SOLID, 1, RGB(45, 255, 45));
-            hpenGray = CreatePen(PS_SOLID, 1, RGB(128, 128, 128));
-            hbrRed = CreateSolidBrush(RGB(255, 0, 0));
-            hbrGreen = CreateSolidBrush(RGB(45, 255, 45));
-            hbrGray = CreateSolidBrush(RGB(128, 128, 128));
+            hpenRed = CreatePen(PS_SOLID, 1, RGB(217, 88, 88));
+            hpenGreen = CreatePen(PS_SOLID, 1, RGB(111, 210, 139));
+            hpenGray = CreatePen(PS_SOLID, 1, RGB(205, 205, 205));
+            hbrRed = CreateSolidBrush(RGB(217, 88, 88));
+            hbrGreen = CreateSolidBrush(RGB(111, 210, 139));
+            hbrGray = CreateSolidBrush(RGB(205, 205, 205));
             
-            //Se crean previamente las serpientes con el tamaño definido y la ubicación
+            //Se crean previamente las serpientes con el tamaño definido y la ubicación, simplemente estético.
             serpiente = NuevaSerpiente(tams, 1, 1);
             otraserpiente = NuevaSerpiente(tams2, 10, 10);
 
-            //Se declara el cuadro de texto que almacenará la dirección ip
+            //Se declara el cuadro de texto que almacenará la dirección IP
             ipTXT = CreateWindowEx(0, L"Edit", L"", ES_LEFT |
                 WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP, 200, 130, 100, 25,
                 hWnd,
@@ -246,7 +310,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             {
                 //Timer que se activa cuando sse seleciona un solo jugador
                 GetClientRect(hWnd, &rect);
-                //if que checa si el juego seleccionado es en solitario y activa los movimientos
+                //if que checa si el juego seleccionado es en solitario. Activa los movimientos
                 //y otras características de una sola serpiente, como la comida, el ajuste, etc.
                 if (soloUs == 1)
                 {
@@ -274,7 +338,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     InvalidateRect(hWnd, NULL, TRUE);
                 }
                 
-                //verifica si se diop el inicio del timer lanzado por la conexión del cliente, este parámetro se ve
+                //Verifica si se dio el inicio del timer lanzado por la conexión del cliente, este parámetro se ve
                 //alterado al momento de que el servidor recibe los datos del cliente
                 if (startTimer == 1)
                 {
@@ -336,10 +400,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             //la diferencia más notable es que en la serpiente dos, para mostrar acciones 
             //solo se entra cuando el tipo de usuario es cliente.
             //Para las dos, y si es que la primera no es del tipo juego solo,
-            //se obtiene el tipo de usuario que realiza el movimiento, también la dirección del movimiento,
-            //además del tamaño actual de la serpiente en cuestión. Todo eso se envuenve en
+            //se obtiene el tipo de usuario que realiza el movimiento, también las direcciones del movimiento para cada serpiente,
+            //el tamaño actual de la serpiente en cuestión y el tipo de lanzador (esUn) que envía el mensaje, en este caso es ESTECLA. Todo eso se envuenve en
             //la variable datosEnviar, que sí, obviemante se envía por MsgEnviar, junto con el 
-            //ip que se ingrese en ipTXT y el hWnd para uso posterior de visualización de movimientos.
+            //IP que se ingrese en ipTXT y el hWnd para uso posterior de visualización de movimientos.
 
             case VK_UP: {
                 
@@ -620,7 +684,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 break;
             }
             case IDM_ACOMPA: {
-                //MessageBox(NULL, L"BBBBBBbbbbbbbbbbb", L"Acompañado", MB_OK | MB_ICONINFORMATION);
+                
                 //Se cierran los hilo
                 CloseHandle(threadServer);
                 CloseHandle(threadCliente);
@@ -628,6 +692,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 //Se libera la memoria que ocupan las serpientes
                 free(serpiente);
                 free(otraserpiente);
+
+                //Se deja de visualizar el ingreso del IP
+                atemptConect = false;
+                ShowWindow(ipTXT, false);
 
                 //Se mata el timer
                 KillTimer(hWnd, IDT_TIMER1);
@@ -695,7 +763,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
                 //Justo despúés de crear el hilo anterior se hace lo siguiente para notificar el inicio del timer con los
                 //respectivos valores para cada serpiente.
-                //Empaquetado o wrap de los datos que se pasarán por el socker para cumplir con la sincronización y
+                //Empaquetado o haciendo wrap de los datos que se pasarán por el socket para cumplir con la sincronización y
                 //comunicación entre las dos máquinas.
                 strcpy(datosEnviar, "");
                 strcat(datosEnviar, numtochar(3));
@@ -709,7 +777,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                // hInstance = ((LPCREATESTRUCT)lParam)->hInstance;
                 //LoadLibrary(L"riched20.dll");
                             
-                
+                //Para visualizar ya los snakes
                 InvalidateRect(hWnd, NULL, TRUE);
               
                 
@@ -798,11 +866,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         //para poder visualizar el elemento en cuestión en el 
         //momento indicado
         if (waitingConect == 1) {
-            TextOut(hdc, 400, 200, L"CREANDO", sizeof("CREANDO"));
-            TextOut(hdc, 200, 200, L"En espera!!!", sizeof("En espera!!!"));
+            TextOut(hdc, 200, 80, L"CREANDO", sizeof("CREANDO"));
+            TextOut(hdc, 200, 100, L"En espera!!!", sizeof("En espera!!!"));
         }
         if (waitingConect == 2) {
-            TextOut(hdc, 400, 200, L"CONECTADO!!!", sizeof("CONECTADO!!!"));
+            TextOut(hdc, 200, 100, L"CONECTADO!!!", sizeof("CONECTADO!!!"));
         }
 
         if (atemptConect) {
@@ -885,15 +953,13 @@ PEDACITOS * NuevaSerpiente(int tams, int enX, int enY) {
 }
 
 void DibujarSerpiente(HDC hdc, const PEDACITOS *serpiente) {
-    static HPEN hpenRed, hpenGreen, hpenGray;
-    static HBRUSH hbrRed, hbrGreen, hbrGray;
+    static HPEN hpenGray;
+    static HBRUSH hbrGray;
 
-    hpenRed = CreatePen(PS_SOLID, 1, RGB(255, 0, 0));
-    hpenGreen = CreatePen(PS_SOLID, 1, RGB(45, 255, 45));
-    hpenGray = CreatePen(PS_SOLID, 1, RGB(128, 128, 128));
-    hbrRed = CreateSolidBrush(RGB(255, 0, 0));
-    hbrGreen = CreateSolidBrush(RGB(45, 255, 45));
-    hbrGray = CreateSolidBrush(RGB(128, 128, 128));
+
+    hpenGray = CreatePen(PS_SOLID, 1, RGB(205, 205, 205));
+
+    hbrGray = CreateSolidBrush(RGB(205, 205, 205));
 
     int i = 1;
     switch (serpiente[0].dir)
@@ -1148,6 +1214,7 @@ int Comer(const PEDACITOS *serpiente, int tams) {
 
 DWORD WINAPI Servidor(LPVOID argumento) {
     HWND hWnd = (HWND)argumento;
+    //Para el manejo del socket
     WSADATA wsaData;
     int iResult;
     int aux;
@@ -1161,10 +1228,12 @@ DWORD WINAPI Servidor(LPVOID argumento) {
 
     int iSendResult;
     int recvbuflen = DEFAULT_BUFLEN;
+
+    //Variables para guardar las cadenas de mensajes para entrada y salida
     char szBuffer[256], szIP[16], szNN[32];
 
 
-
+    // Se inicializa el winsock
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != 0) {
         wsprintf(msgFalla, L"WSAStartup failed with error: %d\n", iResult);
@@ -1173,12 +1242,14 @@ DWORD WINAPI Servidor(LPVOID argumento) {
         return 1;
     }
 
+    //Inicialización de las estructuras para la conexión
     ZeroMemory(&hints, sizeof(hints));
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
     hints.ai_flags = AI_PASSIVE;
 
+    // Resuelve la dirección y el puerto del servidor
     iResult = getaddrinfo(NULL, DEFAULT_PORT, &hints, &result);
     if (iResult != 0) {
         wsprintf(msgFalla, L"getaddrinfo failed with error: %d", iResult);
@@ -1188,7 +1259,7 @@ DWORD WINAPI Servidor(LPVOID argumento) {
         return 1;
     }
 
-    // Crear SOCKET para la coneccion al server
+    // Crea un SOCKET para la conexión al server
     ListenSocket = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
     if (ListenSocket == INVALID_SOCKET) {
         wsprintf(msgFalla, L"socket failed with error: %d", WSAGetLastError());
@@ -1199,7 +1270,7 @@ DWORD WINAPI Servidor(LPVOID argumento) {
         return 1;
     }
     
-
+    //Configura el escucha TCP del socket
     iResult = bind(ListenSocket, result->ai_addr, (int)result->ai_addrlen);
     if (iResult == SOCKET_ERROR) {
         wsprintf(msgFalla, L"bind failed with error: %d\n", WSAGetLastError());
@@ -1212,6 +1283,7 @@ DWORD WINAPI Servidor(LPVOID argumento) {
 
     freeaddrinfo(result);
 
+    //Escucha el socket
     iResult = listen(ListenSocket, SOMAXCONN);
     if (iResult == SOCKET_ERROR) {
         wsprintf(msgFalla, L"listen failed with error: %d", WSAGetLastError());
@@ -1225,6 +1297,7 @@ DWORD WINAPI Servidor(LPVOID argumento) {
     
     while (TRUE) {
 
+        //Acepta el socket de conexión del cliente
         ClientSocket = accept(ListenSocket, NULL, NULL);        
 
         if (ClientSocket == INVALID_SOCKET) {
@@ -1236,23 +1309,22 @@ DWORD WINAPI Servidor(LPVOID argumento) {
         }
         waitingConect = 0;
 
-        // Recibir hasta que el par cierra la conexión
-
+        
+        //Se recibe (y guarda para alguna otra implementación) el IP y el usuario del cliente proveniente del socket, simplemente para corroborar la conexión y se devuelve un OK
         iResult = recv(ClientSocket, szBuffer, sizeof(char) * 256, 0);
         aux = sscanf(szBuffer, "%s %s ", szIP, szNN);
         sprintf_s(szBuffer, "Ok");
 
-        //MessageBox(NULL, L"Se ha conectado a su sesión. lml", L"CONECTADO", MB_OK | MB_ICONINFORMATION);
-
-        // Enviar el búfer al remitente
-
         iSendResult = send(ClientSocket, szBuffer, sizeof(char) * 256, 0);
+
         //Se reciben los datos empaquetados provenientes del cliente
+
         iResult = recv(ClientSocket, szBuffer, sizeof(char) * 256, 0);
 
-        //Se procesan los datos empaquetados provenientes del cliente para que los snakes se visualicen
+        //Se procesan en la función MsgRecibir los datos empaquetados provenientes del cliente para que los snakes se visualicen
         MsgRecibir(hWnd, szBuffer);
 
+        //se devuelve el estado actual del juego (todos los datos)
         iSendResult = send(ClientSocket, szBuffer, sizeof(char) * 256, 0);
 
         
@@ -1260,7 +1332,7 @@ DWORD WINAPI Servidor(LPVOID argumento) {
         iResult = shutdown(ClientSocket, SD_SEND);
     }
 
-    // Limpiar
+    // Limpiar el socket
 
     closesocket(ClientSocket);
     WSACleanup();
@@ -1269,7 +1341,7 @@ DWORD WINAPI Servidor(LPVOID argumento) {
 }
 
 void MsgEnviar(char* direct, HWND hIP, HWND hWnd) {
-    //Esta función recibe lo que se envíe desde las teclas
+    //Esta función recibe lo que se envíe desde las teclas, el timer o la primera conexión
     //Lo que es importante aquí es hacer la traducción y envío del contenido a enviar, 
     //junto con el ip y el hWnd hacie el cliente para realizar la pertinente
     //conexión con la computadora deseada.
@@ -1419,7 +1491,7 @@ int Cliente(char* szDirIP, PSTR pstrMensaje, HWND hWnd) {
 
 char* numtochar(int num) {
     //lo que hace esta función es pasar de número a char para el empaquetado de la información
-    //y que sea legible para la otra máquina, en su respectivo MsgEnviar y MsgRecibir
+    //y que sea legible en el paso del socket
     char val[3] = { num + '0' };
     strcat(val, " ");
     return val;
@@ -1470,6 +1542,7 @@ void MsgRecibir(HWND hWnd, char* szMsg) {
         break;
     case ESINICIOTIMER:
         startTimer = 1;
+
         //Para visualizar todo los cambios en la pantalla del juego
         InvalidateRect(hWnd, NULL, TRUE);
         break;
