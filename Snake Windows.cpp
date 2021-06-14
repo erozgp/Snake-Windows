@@ -47,6 +47,7 @@ static int soloUs = 3;
 static int tams = 5;
 static int tams2 = 5;
 static int cuenta = 0;
+static int startTimer = 0;
 RECT rect1;
 //Declaración de serpientes
 static PEDACITOS* serpiente = NULL;
@@ -245,38 +246,79 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             {
                 //Timer que se activa cuando sse seleciona un solo jugador
                 GetClientRect(hWnd, &rect);
-                
-                if (!MoverSerpiente(serpiente, serpiente[tams - 1].dir, rect, tams)) {
-                    KillTimer(hWnd, IDT_TIMER1);
-                    MessageBox(hWnd, L"Ya se murió", L"Fin del juego", MB_OK | MB_ICONINFORMATION);
+                //if que checa si el juego seleccionado es en solitario y activa los movimientos
+                //y otras características de una sola serpiente, como la comida, el ajuste, etc.
+                if (soloUs == 1)
+                {
+                    if (!MoverSerpiente(serpiente, serpiente[tams - 1].dir, rect, tams)) {
+                        KillTimer(hWnd, IDT_TIMER1);
+                        MessageBox(hWnd, L"Ya se murió", L"Fin del juego", MB_OK | MB_ICONINFORMATION);
+                    }
+                    cuenta++;
+                    if (cuenta == 15) {
+                        if (rand() % 100 < 80) {
+                            com.tipo = CRECE;
+                        }
+                        else {
+                            com.tipo = ACHICA;
+                        }
+                        com.pos.x = rand() % rect.right / TAMSERP;
+                        com.pos.y = rand() % rect.bottom / TAMSERP;
+                        cuenta = 0;
+                    }
+                    if (Comer(serpiente, tams)) {
+                        serpiente = AjustarSerpiente(serpiente, &tams, com.tipo, rect);
+                        com.tipo = NADA;
+                    }
+                    //actualiza solo en el caso de ser juego en solitario
+                    InvalidateRect(hWnd, NULL, TRUE);
                 }
+                
+                //verifica si se diop el inicio del timer lanzado por la conexión del cliente, este parámetro se ve
+                //alterado al momento de que el servidor recibe los datos del cliente
+                if (startTimer == 1)
+                {
+                    if (!MoverSerpiente(serpiente, serpiente[tams - 1].dir, rect, tams)) {
+                        KillTimer(hWnd, IDT_TIMER1);
+                        MessageBox(hWnd, L"Ya se murió", L"Fin del juego", MB_OK | MB_ICONINFORMATION);
+                    }
 
-                if (!MoverSerpiente(otraserpiente, otraserpiente[tams2 - 1].dir, rect, tams2)) {
-                    KillTimer(hWnd, IDT_TIMER1);
-                    MessageBox(hWnd, L"Ya se murió", L"Fin del juego", MB_OK | MB_ICONINFORMATION);
-                }
-                
-                cuenta++;
-                if (cuenta == 15) {
-                    if (rand() % 100 < 80) {
-                        com.tipo = CRECE;
+                    if (!MoverSerpiente(otraserpiente, otraserpiente[tams2 - 1].dir, rect, tams2)) {
+                        KillTimer(hWnd, IDT_TIMER1);
+                        MessageBox(hWnd, L"Ya se murió", L"Fin del juego", MB_OK | MB_ICONINFORMATION);
                     }
-                    else {
-                        com.tipo = ACHICA;
+                    cuenta++;
+                    if (cuenta == 15) {
+                        if (rand() % 100 < 80) {
+                            com.tipo = CRECE;
+                        }
+                        else {
+                            com.tipo = ACHICA;
+                        }
+                        com.pos.x = rand() % rect.right / TAMSERP;
+                        com.pos.y = rand() % rect.bottom / TAMSERP;
+                        cuenta = 0;
                     }
-                    com.pos.x = rand() % rect.right/TAMSERP;
-                    com.pos.y = rand() % rect.bottom/TAMSERP;
-                    cuenta = 0;
+                    if (Comer(serpiente, tams)) {
+                        serpiente = AjustarSerpiente(serpiente, &tams, com.tipo, rect);
+                        com.tipo = NADA;
+                    }
+                    if (Comer(otraserpiente, tams)) {
+                        otraserpiente = AjustarSerpiente(otraserpiente, &tams2, com.tipo, rect);
+                        com.tipo = NADA;
+                    }
+
+                    //Empaquetado o wrap de los datos que se pasarán por el socker para cumplir con la sincronización y
+                    //comunicación entre las dos máquinas.
+                    strcpy(datosEnviar, "");
+                    strcat(datosEnviar, numtochar(3));
+                    strcat(datosEnviar, numtochar(serpiente[tams-1].dir));
+                    strcat(datosEnviar, numtochar(tams));
+                    strcat(datosEnviar, numtochar(otraserpiente[tams2 - 1].dir));
+                    strcat(datosEnviar, numtochar(tams2));
+                    strcat(datosEnviar, numtochar(ESTIMER));
+                    MsgEnviar(datosEnviar, ipTXT, hWnd);
                 }
-                if (Comer(serpiente, tams)) {
-                    serpiente = AjustarSerpiente(serpiente, &tams, com.tipo, rect);
-                    com.tipo = NADA;
-                }
-                if (Comer(otraserpiente, tams)) {
-                    otraserpiente = AjustarSerpiente(otraserpiente, &tams2, com.tipo, rect);
-                    com.tipo = NADA;
-                }
-                InvalidateRect(hWnd, NULL, TRUE);
                 
             }
             break;
@@ -304,10 +346,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 if (tipoUs == 0 || soloUs == 1) {
                     if (soloUs != 1)
                     {
+                        //Empaquetado o wrap de los datos que se pasarán por el socker para cumplir con la sincronización y
+                        //comunicación entre las dos máquinas.
                         strcpy(datosEnviar, "");
                         strcat(datosEnviar, numtochar(0));
                         strcat(datosEnviar, numtochar(ARRIBA));
                         strcat(datosEnviar, numtochar(tams));
+                        strcat(datosEnviar, numtochar(otraserpiente[tams2 - 1].dir));
+                        strcat(datosEnviar, numtochar(tams2));
+                        strcat(datosEnviar, numtochar(ESTECLA));
                         MsgEnviar(datosEnviar, ipTXT, hWnd);
                     }
                     
@@ -326,10 +373,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     InvalidateRect(hWnd, NULL, TRUE);
                 }
                 if (tipoUs == 1) {
+                    //Empaquetado o wrap de los datos que se pasarán por el socker para cumplir con la sincronización y
+                    //comunicación entre las dos máquinas.
                     strcpy(datosEnviar, "");
                     strcat(datosEnviar, numtochar(1));
+                    strcat(datosEnviar, numtochar(serpiente[tams - 1].dir));
+                    strcat(datosEnviar, numtochar(tams));
                     strcat(datosEnviar, numtochar(ARRIBA));
                     strcat(datosEnviar, numtochar(tams2));
+                    strcat(datosEnviar, numtochar(ESTECLA));
+                    MsgEnviar(datosEnviar, ipTXT, hWnd);
 
                     if (!MoverSerpiente(otraserpiente, ARRIBA, rect, tams2)) {
                         KillTimer(hWnd, IDT_TIMER1);
@@ -341,7 +394,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                         com.tipo = NADA;
                     }
 
-                    MsgEnviar(datosEnviar, ipTXT, hWnd);
+                   
 
                     InvalidateRect(hWnd, NULL, TRUE);
                 }
@@ -355,10 +408,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 if (tipoUs == 0 || soloUs == 1) {
                     if (soloUs != 1)
                     {
+                        //Empaquetado o wrap de los datos que se pasarán por el socker para cumplir con la sincronización y
+                        //comunicación entre las dos máquinas.
                         strcpy(datosEnviar, "");
                         strcat(datosEnviar, numtochar(0));
                         strcat(datosEnviar, numtochar(ABAJO));
                         strcat(datosEnviar, numtochar(tams));
+                        strcat(datosEnviar, numtochar(otraserpiente[tams2 - 1].dir));
+                        strcat(datosEnviar, numtochar(tams2));
+                        strcat(datosEnviar, numtochar(ESTECLA));
                         MsgEnviar(datosEnviar, ipTXT, hWnd);
                     }
                     if (!MoverSerpiente(serpiente, ABAJO, rect, tams)) {
@@ -375,10 +433,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     InvalidateRect(hWnd, NULL, TRUE);
                 }
                 if (tipoUs == 1) {
+                    //Empaquetado o wrap de los datos que se pasarán por el socker para cumplir con la sincronización y
+                    //comunicación entre las dos máquinas.
                     strcpy(datosEnviar, "");
                     strcat(datosEnviar, numtochar(1));
+                    strcat(datosEnviar, numtochar(serpiente[tams - 1].dir));
+                    strcat(datosEnviar, numtochar(tams));
                     strcat(datosEnviar, numtochar(ABAJO));
                     strcat(datosEnviar, numtochar(tams2));
+                    strcat(datosEnviar, numtochar(ESTECLA));
+                    MsgEnviar(datosEnviar, ipTXT, hWnd);
+
                     if (!MoverSerpiente(otraserpiente, ABAJO, rect, tams2)) {
                         KillTimer(hWnd, IDT_TIMER1);
                         MessageBox(hWnd, L"Ya se murió", L"Fin del juego", MB_OK | MB_ICONINFORMATION);
@@ -389,7 +454,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                         com.tipo = NADA;
                     }
 
-                    MsgEnviar(datosEnviar, ipTXT, hWnd);
+                    
 
                     InvalidateRect(hWnd, NULL, TRUE);
                 }
@@ -401,10 +466,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 if (tipoUs == 0 || soloUs == 1) {
                     if (soloUs != 1)
                     {
+                        //Empaquetado o wrap de los datos que se pasarán por el socker para cumplir con la sincronización y
+                        //comunicación entre las dos máquinas.
                         strcpy(datosEnviar, "");
                         strcat(datosEnviar, numtochar(0));
                         strcat(datosEnviar, numtochar(IZQ));
                         strcat(datosEnviar, numtochar(tams));
+                        strcat(datosEnviar, numtochar(otraserpiente[tams2 - 1].dir));
+                        strcat(datosEnviar, numtochar(tams2));
+                        strcat(datosEnviar, numtochar(ESTECLA));
                         MsgEnviar(datosEnviar, ipTXT, hWnd);
                     }
                     
@@ -422,10 +492,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     InvalidateRect(hWnd, NULL, TRUE);
                 }
                 if (tipoUs == 1) {
+                    //Empaquetado o wrap de los datos que se pasarán por el socker para cumplir con la sincronización y
+                    //comunicación entre las dos máquinas.
                     strcpy(datosEnviar, "");
                     strcat(datosEnviar, numtochar(1));
+                    strcat(datosEnviar, numtochar(serpiente[tams - 1].dir));
+                    strcat(datosEnviar, numtochar(tams));
                     strcat(datosEnviar, numtochar(IZQ));
                     strcat(datosEnviar, numtochar(tams2));
+                    strcat(datosEnviar, numtochar(ESTECLA));
+                    MsgEnviar(datosEnviar, ipTXT, hWnd);
+
                     if (!MoverSerpiente(otraserpiente, IZQ, rect, tams2)) {
                         KillTimer(hWnd, IDT_TIMER1);
                         MessageBox(hWnd, L"Ya se murió", L"Fin del juego", MB_OK | MB_ICONINFORMATION);
@@ -436,7 +513,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                         com.tipo = NADA;
                     }
 
-                    MsgEnviar(datosEnviar, ipTXT, hWnd);
+                   
 
                     InvalidateRect(hWnd, NULL, TRUE);
                 }
@@ -449,10 +526,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 if (tipoUs == 0 || soloUs == 1) {
                     if (soloUs != 1)
                     {
+                        //Empaquetado o wrap de los datos que se pasarán por el socker para cumplir con la sincronización y
+                        //comunicación entre las dos máquinas.
                         strcpy(datosEnviar, "");
                         strcat(datosEnviar, numtochar(0));
                         strcat(datosEnviar, numtochar(DER));
                         strcat(datosEnviar, numtochar(tams));
+                        strcat(datosEnviar, numtochar(otraserpiente[tams2 - 1].dir));
+                        strcat(datosEnviar, numtochar(tams2));
+                        strcat(datosEnviar, numtochar(ESTECLA));
                         MsgEnviar(datosEnviar, ipTXT, hWnd);
                     }
                     
@@ -470,10 +552,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     InvalidateRect(hWnd, NULL, TRUE);
                 }
                 if (tipoUs == 1) {
+                    //Empaquetado o wrap de los datos que se pasarán por el socker para cumplir con la sincronización y
+                    //comunicación entre las dos máquinas.
                     strcpy(datosEnviar, "");
                     strcat(datosEnviar, numtochar(1));
+                    strcat(datosEnviar, numtochar(serpiente[tams - 1].dir));
+                    strcat(datosEnviar, numtochar(tams));
                     strcat(datosEnviar, numtochar(DER));
                     strcat(datosEnviar, numtochar(tams2));
+                    strcat(datosEnviar, numtochar(ESTECLA));
+                    MsgEnviar(datosEnviar, ipTXT, hWnd);
                     if (!MoverSerpiente(otraserpiente, DER, rect, tams2)) {
                         KillTimer(hWnd, IDT_TIMER1);
                         MessageBox(hWnd, L"Ya se murió", L"Fin del juego", MB_OK | MB_ICONINFORMATION);
@@ -484,7 +572,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                         com.tipo = NADA;
                     }
 
-                    MsgEnviar(datosEnviar, ipTXT, hWnd);
+                    
 
                     InvalidateRect(hWnd, NULL, TRUE);
                 }
@@ -532,14 +620,29 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 break;
             }
             case IDM_ACOMPA: {
-                MessageBox(NULL, L"BBBBBBbbbbbbbbbbb", L"Acompañado", MB_OK | MB_ICONINFORMATION);
-                
+                //MessageBox(NULL, L"BBBBBBbbbbbbbbbbb", L"Acompañado", MB_OK | MB_ICONINFORMATION);
+                //Se cierran los hilo
+                CloseHandle(threadServer);
+                CloseHandle(threadCliente);
+
+                //Se libera la memoria que ocupan las serpientes
+                free(serpiente);
+                free(otraserpiente);
+
+                //Se mata el timer
+                KillTimer(hWnd, IDT_TIMER1);
+
                 //Se declaran nuevos valores para las banderas, surtiendo efecto en la visualización de elementos gráficos
                 tipoUs = 0;
                 soloUs = 0;
                 waitingConect = 1;
-                //serpiente = NuevaSerpiente(tams, 1, 1);
-                //otraserpiente = NuevaSerpiente(tams2, 10, 10);
+                com = { {0,0}, NADA };
+                cuenta = 0;
+                //Se crean previamente las serpientes con el tamaño definido y la ubicación
+                serpiente = NuevaSerpiente(tams, 1, 1);
+                otraserpiente = NuevaSerpiente(tams2, 10, 10);
+                SetTimer(hWnd, IDT_TIMER1, 500, NULL);
+                SetFocus(hWnd);
                 // Se crea el hilo pasandole el tipo de seguridad, el tamaño de la pila, la función que 
                 //se levantará en el hilo, el argumento de la función y la devolución del 
                 //identificador del hilo
@@ -554,13 +657,28 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 break;
             }
             case IDM_CONECT: {
+                //Se cierran los hilo
+                CloseHandle(threadServer);
+                CloseHandle(threadCliente);
+
+                //Se libera la memoria que ocupan las serpientes
+                free(serpiente);
+                free(otraserpiente);
                 //Banderas que se alteran de acuerdo al flujo de la aplicación
                 atemptConect = false;
                 waitingConect = 2;
                 tipoUs = 1;
                 soloUs = 0;
+                //Se oculta la toma del IP
                 ShowWindow(ipTXT, false);
 
+                com = { {0,0}, NADA };
+                cuenta = 0;
+                //Se crean previamente las serpientes con el tamaño definido y la ubicación
+                serpiente = NuevaSerpiente(tams, 1, 1);
+                otraserpiente = NuevaSerpiente(tams2, 10, 10);
+                SetTimer(hWnd, IDT_TIMER1, 500, NULL);
+                SetFocus(hWnd);
                 //serpiente = NuevaSerpiente(tams, 1, 1);
                 //otraserpiente = NuevaSerpiente(tams2, 10, 10);
                 //MessageBox(NULL, (LPCWSTR)ipTXT, L"XD", MB_OK | MB_ICONINFORMATION);
@@ -574,6 +692,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 if (threadCliente == NULL) {
                     MessageBox(hWnd, L"Error al crear el hilo para el servidor", L"Error", MB_OK | MB_ICONERROR);
                 }
+
+                //Justo despúés de crear el hilo anterior se hace lo siguiente para notificar el inicio del timer con los
+                //respectivos valores para cada serpiente.
+                //Empaquetado o wrap de los datos que se pasarán por el socker para cumplir con la sincronización y
+                //comunicación entre las dos máquinas.
+                strcpy(datosEnviar, "");
+                strcat(datosEnviar, numtochar(3));
+                strcat(datosEnviar, numtochar(serpiente[tams - 1].dir));
+                strcat(datosEnviar, numtochar(tams));
+                strcat(datosEnviar, numtochar(otraserpiente[tams2 - 1].dir));
+                strcat(datosEnviar, numtochar(tams2));
+                strcat(datosEnviar, numtochar(ESINICIOTIMER));
+                MsgEnviar(datosEnviar, ipTXT, hWnd);
                 
                // hInstance = ((LPCREATESTRUCT)lParam)->hInstance;
                 //LoadLibrary(L"riched20.dll");
@@ -589,13 +720,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 //DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
                 break;
             case IDM_SALIR:
+
+
                 //Se libera la memoria que ocupan las serpientes
                 free(serpiente);
                     
                    
                 free(otraserpiente);
                     
-                
+                //Se cierran los hilo
+                CloseHandle(threadServer);
+                CloseHandle(threadCliente);
+
                 DestroyWindow(hWnd);
                 break;
             case ID_ENVIARBTN:
@@ -1106,13 +1242,20 @@ DWORD WINAPI Servidor(LPVOID argumento) {
         aux = sscanf(szBuffer, "%s %s ", szIP, szNN);
         sprintf_s(szBuffer, "Ok");
 
+        //MessageBox(NULL, L"Se ha conectado a su sesión. lml", L"CONECTADO", MB_OK | MB_ICONINFORMATION);
+
         // Enviar el búfer al remitente
 
         iSendResult = send(ClientSocket, szBuffer, sizeof(char) * 256, 0);
+        //Se reciben los datos empaquetados provenientes del cliente
         iResult = recv(ClientSocket, szBuffer, sizeof(char) * 256, 0);
+
+        //Se procesan los datos empaquetados provenientes del cliente para que los snakes se visualicen
+        MsgRecibir(hWnd, szBuffer);
+
         iSendResult = send(ClientSocket, szBuffer, sizeof(char) * 256, 0);
 
-        MsgRecibir(hWnd, szBuffer);
+        
 
         iResult = shutdown(ClientSocket, SD_SEND);
     }
@@ -1163,7 +1306,9 @@ void MsgEnviar(char* direct, HWND hIP, HWND hWnd) {
 }
 
 int Cliente(char* szDirIP, PSTR pstrMensaje, HWND hWnd) {
-    //Esta sección es importante para la conexión en el socker para las máquinas
+    //Esta sección es importante para la conexión en el socket para las máquinas, en el caso particular cuando es
+    //cliente se manda la información para su posterior procesamiento en el servidor y por ende, la visualización
+    //gráfica de los snakes
     WSADATA wsaData;
     SOCKET ConnectSocket = INVALID_SOCKET;
     struct addrinfo* result = NULL, * ptr = NULL, hints;
@@ -1239,13 +1384,18 @@ int Cliente(char* szDirIP, PSTR pstrMensaje, HWND hWnd) {
     sprintf_s(szMsg, "%s %s ", szMiIP, szUsuario);
     iResult = send(ConnectSocket, szMsg, sizeof(char) * 256, 0);
     iResult = recv(ConnectSocket, szMsg, sizeof(char) * 256, 0);
-    //Se obtiene el echo lanzado por el servidor
-
+    //Se obtiene el echo lanzado por el servidor para ver si se conectó y se lanza una MessageBox
+    /*
+    if (strcmp(szMsg, "Ok") == 0)
+    {      
+        MessageBox(hWnd, L"Se ha conectado a una sesión. lml", L"CONECTADO", MB_OK | MB_ICONINFORMATION);
+    }
+    */
     //se coloca el envío de la información, es decir de los datos
-    //tales como la dirección, el tipo de usuario y el tamaño de la serpiente
+    //tales como las direcciones para las serpientes, el tipo de usuario en turno, el tamaño de cada una de las serpientes y
+    //el esUn respectivo para saber qué activar en el servidor
     //aquí faltaría que los datos a enviar contuviera la posición actual de la comida
-    //y alguna variable que sirva para que la sincronización con el timer
-    //sea lo más correcta posible
+    
     strcpy_s(szMsg, pstrMensaje);
 
     //Se hace el envío de los datos y se espera recibir contestación por parte del servidor
@@ -1253,9 +1403,12 @@ int Cliente(char* szDirIP, PSTR pstrMensaje, HWND hWnd) {
     iResult = shutdown(ConnectSocket, SD_SEND);
     iResult = recv(ConnectSocket, szMsg, sizeof(char) * 256, 0);
 
-    //Una vez recibida la información proveniente del socket, es decir del servidor
-    //se manda junto al hWnd, para su desempaquetado y posterior uso
-    MsgRecibir(hWnd, szMsg);
+
+    //Una vez recibida la información proveniente del socket, de que es correcta la conexión final. 
+    //Se debe actualizar la vista gráfica para que todos los cambios que procese el servidor, aunque aquí sea el cliente, se visualicen.
+    //Es decir que en todo momento se debe actualizar la vista, para mantener sincronizado el juego.
+    InvalidateRect(hWnd, NULL, TRUE);
+    //MsgRecibir(hWnd, szMsg);
 
     closesocket(ConnectSocket);
     WSACleanup();
@@ -1276,33 +1429,54 @@ void MsgRecibir(HWND hWnd, char* szMsg) {
     //Aquí es donde sucede la magia por así llamarlo.
     //Primeramente se obtienen los valores almacenados que se han recibido por el socket
     //después se traducen a enteros, para su compatibilidad con la función de
-    //MoverSerpiente, en donde al fín se hace uso del hWnd para obtener el Rect del cliente
+    //MoverSerpiente, en donde al fin se hace uso del hWnd para obtener el Rect del cliente
     //Y poder así cumplir con los parámetros.
     //Como he mencionado antes, en el paquete de datos se presenta el tipo de usuario
     //el cual es, al menos, la identificación de servidor o cliente, para poder
     //dibujar la serpiente en turno.
-    //quiero destacar que justo aquí se recibirían los otros parámetros hipotéticos, ya que no pude implementarlos
-    //lo que es la posición de la comida, que sea exacta y apta para que las dos serpientes coman sincronizadamente,
-    //y además un parámetro que ayuda a la sincronización global de las serpientes, junto al timer.
-    //Esto porque en esta versión, existe un desfase en los movimientos, de una máquina a otra, sin embargo,
-    //las órdenes de direcciones para cada una de las máquinas funcionan correctamente y con su propio periférico.
+    //Además de loss tamaños de las dos serpientes, las direcciones de las doss serpiente y el esUn, que viene siendo, quién envió exactamente el mensaje
+    //para así poder tomass la decisión (en el switch) de si fue por una tecla, si fue por el timer o si fue por la primera conexión exitosa entre las máquinas.
     GetClientRect(hWnd, &rect1);
-    char tipoS[2], direcS[2], tamS[2];
-    int itipoS = 0, idirecS = 0, itamS = 0;
-    sscanf(szMsg, "%s %s %s", tipoS, direcS, tamS);
+    char tipoS[2], direcS[2], tamS[2], direcOS[2], tamOS[2], esUn[2];
+    int itipoS = 0, idirecS = 0, itamS = 0, idirecOS = 0, itamOS = 0, iesUn = 0;
+    sscanf(szMsg, "%s %s %s %s %s %s", tipoS, direcS, tamS, direcOS, tamOS, esUn);
 
     itipoS = atoi(tipoS); idirecS = atoi(direcS);
-    itamS = atoi(tamS);
+    itamS = atoi(tamS); idirecOS = atoi(direcOS);
+    itamOS = atoi(tamOS); iesUn = atoi(esUn);
 
-    if (itipoS == 0) {
+    switch (iesUn)
+    {
+    case ESTECLA:
+        if (itipoS == 0) {
+
+            MoverSerpiente(serpiente, idirecS, rect1, itamS);
+            //Para visualizar todo los cambios en la pantalla del juego
+            InvalidateRect(hWnd, NULL, TRUE);
+        }
+        if (itipoS == 1) {
+
+            MoverSerpiente(otraserpiente, idirecOS, rect1, itamOS);
+            //Para visualizar todo los cambios en la pantalla del juego
+            InvalidateRect(hWnd, NULL, TRUE);
+        }
+        break;
+    case ESTIMER:
         
         MoverSerpiente(serpiente, idirecS, rect1, itamS);
-    }
-    if (itipoS == 1) {
-        
-        MoverSerpiente(otraserpiente, idirecS, rect1, itamS);
+        MoverSerpiente(otraserpiente, idirecOS, rect1, itamOS);
+        //Para visualizar todo los cambios en la pantalla del juego
+        InvalidateRect(hWnd, NULL, TRUE);
+        break;
+    case ESINICIOTIMER:
+        startTimer = 1;
+        //Para visualizar todo los cambios en la pantalla del juego
+        InvalidateRect(hWnd, NULL, TRUE);
+        break;
+    default:
+        break;
     }
 
-    InvalidateRect(hWnd, NULL, TRUE);
+    
  
 }

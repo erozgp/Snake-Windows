@@ -43,3 +43,7 @@
 #define ID_ESCRIBIRTXT		202
 #define ID_IPTXT		203
 #define ID_ENVIARBTN		204
+
+#define ESTIMER 1
+#define ESTECLA 2
+#define ESINICIOTIMER 3
